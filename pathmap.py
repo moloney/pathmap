@@ -227,10 +227,12 @@ class PathMap(object):
                 except OSError as error:
                     if self.on_error is not None:
                         self.on_error(error)
+                    else:
+                        raise
                 else:
                     # Determine the current depth from the root_path
                     curr_depth = (curr_dir[0].count(os.sep) -
-                              root_path.count(os.sep)) + 1
+                                  root_path.count(os.sep)) + 1
                     
                     # We can clear some of the entries if the depth limits are
                     # not met
@@ -249,11 +251,14 @@ class PathMap(object):
 
                     # Iterate through the directories first
                     for e in dirs:
-                        # Yield the directory if it is matched
                         p = os.path.join(curr_dir[0], e.name)
-                        match_info = self._test_target_path(p, e)
-                        if not match_info is NoMatch:
-                            yield MatchResult(p, e, match_info)
+                        
+                        # If the directory is in our depth range, check if it 
+                        # is a match
+                        if curr_depth >= self.depth[0]:
+                            match_info = self._test_target_path(p, e)
+                            if not match_info is NoMatch:
+                                yield MatchResult(p, e, match_info)
                             
                         # If it is not pruned, add it to next_dirs. Only 
                         # follow symlinks if requested.
@@ -272,9 +277,9 @@ class PathMap(object):
                         if not match_info is NoMatch:
                             yield MatchResult(p, e, match_info)
 
-                    # Update curr_dir or break if we are done
-                    try:
-                        curr_dir = next_dirs.pop(0)
-                    except IndexError:
-                        break
+                # Update curr_dir or break if we are done
+                try:
+                    curr_dir = next_dirs.pop(0)
+                except IndexError:
+                    break
 
