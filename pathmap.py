@@ -175,13 +175,6 @@ class PathMap(object):
             if dir_entries is not None:
                 dir_entries = [dir_entries]
 
-        # Create the DirEntry objects if they were not given
-        if dir_entries is None:
-            dir_entries = []
-            for path in root_paths: #TODO: doesn't work for generators!
-                ppath, name = os.path.split(path)
-                dir_entries.append(scandir.GenericDirEntry(ppath, name))
-
         # Make sure any regex rules have been converted to a callable
         self._convert_regex_rules()
 
