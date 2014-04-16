@@ -4,11 +4,13 @@ from tempfile import mkdtemp
 import shutil, os, sys
 from os.path import join, split
 
+
 #Make sure we test the local source code rather than the installed copy
 test_dir = os.path.dirname(__file__)
 src_dir = os.path.normpath(os.path.join(test_dir, '..'))
 sys.path.insert(0, src_dir)
 import pathmap
+
 
 class MakeRegexRuleTest():
 
@@ -45,6 +47,7 @@ class MakeRegexRuleTest():
             match_rule = pathmap.make_regex_rule(match_regex)
             for input_str, results in tests.iteritems():
                 assert(match_rule(input_str) == results)
+
 
 class TestSimpleRules():
     paths_at_level = [['level0-dir'],
