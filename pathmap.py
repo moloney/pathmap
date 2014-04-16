@@ -15,20 +15,23 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-class NoMatch(object):
+class NoMatchType(object):
     '''Singleton that can be returned by rules to indicate they did not match
     the given input.'''
     __metaclass__ = Singleton
 
-    def __bool__(self):
+    def __nonzero__(self):
         return False
 
+    __bool__ = __nonzero__
+
+NoMatch = NoMatchType()
 
 def make_regex_rule(regex_str):
-    '''Takes a string containing a regex pattern and returns a function 
-    that can be used as a PathMap rule. 
-    
-    The returned 'match_info' will be a list containing the full regex match 
+    '''Takes a string containing a regex pattern and returns a function
+    that can be used as a PathMap rule.
+
+    The returned 'match_info' will be a list containing the full regex match
     plus any matched subgroups.
     '''
     regex = re.compile(regex_str)
@@ -92,7 +95,7 @@ class PathMap(object):
 
     sort : bool
         If true the paths in each directory will be processed and generated
-        in sorted order, with directories proceeding files. 
+        in sorted order, with directories proceeding files.
 
     on_error : callable
         Callback for errors from scandir. The errors are typically due to a
@@ -148,22 +151,22 @@ class PathMap(object):
         return result
 
     def walk(self, root_paths, dir_entries=None):
-        '''Generate matches by recursively walking from the 'root_paths' down 
-        into the directory structure. 
-        
-        The object's rules define which paths are generated, and the 
+        '''Generate matches by recursively walking from the 'root_paths' down
+        into the directory structure.
+
+        The object's rules define which paths are generated, and the
         `match_rule` provides the `match_info` result as it's return value.
 
         Parameters
         ----------
         root_paths : iter
-            Provides the paths to start our walk from. If you want these to 
+            Provides the paths to start our walk from. If you want these to
             be processed into sorted order you must sort them yourself.
-            
+
         dir_entries : iter or None
-            If given, must provide a scandir.DirEntry for each root path. If 
+            If given, must provide a scandir.DirEntry for each root path. If
             not provided we must call stat for each root path.
-            
+
         Returns
         -------
         result : MatchResult
@@ -182,7 +185,7 @@ class PathMap(object):
         for root_idx, root_path in enumerate(root_paths):
             # Get rid of any extra path seperators
             root_path = normpath(root_path)
-            
+
             #Get the corresponding DirEntry
             if dir_entries is None:
                 p, name = os.path.split(root_path)
@@ -233,12 +236,12 @@ class PathMap(object):
                     # Determine the current depth from the root_path
                     curr_depth = (curr_dir[0].count(os.sep) -
                                   root_path.count(os.sep)) + 1
-                    
+
                     # We can clear some of the entries if the depth limits are
                     # not met
                     if curr_depth < self.depth[0]:
                         nondirs = []
-                    elif (self.depth[1] is not None and 
+                    elif (self.depth[1] is not None and
                           curr_depth > self.depth[1]
                          ):
                         dirs = []
@@ -252,15 +255,15 @@ class PathMap(object):
                     # Iterate through the directories first
                     for e in dirs:
                         p = os.path.join(curr_dir[0], e.name)
-                        
-                        # If the directory is in our depth range, check if it 
+
+                        # If the directory is in our depth range, check if it
                         # is a match
                         if curr_depth >= self.depth[0]:
                             match_info = self._test_target_path(p, e)
                             if not match_info is NoMatch:
                                 yield MatchResult(p, e, match_info)
-                            
-                        # If it is not pruned, add it to next_dirs. Only 
+
+                        # If it is not pruned, add it to next_dirs. Only
                         # follow symlinks if requested.
                         if self.follow_symlinks or not e.is_symlink():
                             for rule in self.prune_rules:
@@ -268,7 +271,7 @@ class PathMap(object):
                                     break
                             else:
                                 next_dirs.append((p, e))
-                    
+
                     # Iterate through non-directories next
                     for e in nondirs:
                         # Yield the non-directory if it is matched
