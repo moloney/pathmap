@@ -49,6 +49,16 @@ class MakeRegexRuleTest():
                 assert(match_rule(input_str) == results)
 
 
+def build_dir(base_dir, paths_at_level):
+    for level in paths_at_level:
+        for path in level:
+            if split(path)[1].split('-')[-1].startswith('dir'):
+                os.mkdir(join(base_dir, path))
+            else:
+                tmpfile = open(join(base_dir, path), 'a')
+                tmpfile.close()
+
+
 class TestSimpleRules():
     paths_at_level = [['level0-dir'],
                       [join('level0-dir', 'level1-file1'),
@@ -72,19 +82,10 @@ class TestSimpleRules():
                       ],
                      ]
 
-    def build_dir(self):
-        for level in self.paths_at_level:
-            for path in level:
-                if split(path)[1].split('-')[-1].startswith('dir'):
-                    os.mkdir(join(self.test_dir, path))
-                else:
-                    tmpfile = open(join(self.test_dir, path), 'a')
-                    tmpfile.close()
-
     def setup(self):
         self.init_dir = os.getcwd()
         self.test_dir = mkdtemp()
-        self.build_dir()
+        build_dir(self.test_dir, self.paths_at_level)
         os.chdir(self.test_dir)
 
     def tearDown(self):
@@ -94,7 +95,7 @@ class TestSimpleRules():
     def test_min_depth(self):
         for i in range(len(self.paths_at_level)):
             pm = pathmap.PathMap(depth=(i, None))
-            matches = list(pm.walk('level0-dir'))
+            matches = list(pm.matches('level0-dir'))
 
             total_paths = 0
             for j in range(i, len(self.paths_at_level)):
@@ -110,7 +111,7 @@ class TestSimpleRules():
     def test_max_depth(self):
         for i in range(len(self.paths_at_level)):
             pm = pathmap.PathMap(depth=(0, i))
-            matches = list(pm.walk('level0-dir'))
+            matches = list(pm.matches('level0-dir'))
 
             total_paths = 0
             for j in range(0, i+1):
@@ -123,7 +124,7 @@ class TestSimpleRules():
     def test_match_regex(self):
         for i in range(len(self.paths_at_level)):
             pm = pathmap.PathMap('level' + str(i))
-            matches = list(pm.walk('level0-dir'))
+            matches = list(pm.matches('level0-dir'))
 
             for j in range(i, len(self.paths_at_level)):
                 for path in self.paths_at_level[j]:
@@ -134,12 +135,12 @@ class TestSimpleRules():
 
     def test_ignore_regex(self):
         pm = pathmap.PathMap(ignore_rules=['level0'])
-        matches = list(pm.walk('level0-dir'))
+        matches = list(pm.matches('level0-dir'))
         assert(len(matches) == 0)
 
         for i in range(1, len(self.paths_at_level)):
             pm = pathmap.PathMap(ignore_rules=['level' + str(i)])
-            matches = list(pm.walk('level0-dir'))
+            matches = list(pm.matches('level0-dir'))
 
             for j in range(0, i):
                 for path in self.paths_at_level[j]:
@@ -149,19 +150,19 @@ class TestSimpleRules():
     def test_ignore_regexes(self):
         ignore_rules = ['level2-file1', '.+'+os.sep+'level3-dir1$']
         pm = pathmap.PathMap(ignore_rules=ignore_rules)
-        for match_result in pm.walk('level0-dir'):
+        for match_result in pm.matches('level0-dir'):
             assert(not os.path.basename(match_result.path) in
                    ['level2-file1', 'level3-dir1'])
 
     def test_prune_regex(self):
         pm = pathmap.PathMap(prune_rules=['level0-dir'])
-        matches = list(pm.walk('level0-dir'))
+        matches = list(pm.matches('level0-dir'))
         assert(len(matches) == 1)
         assert(matches[0].path == 'level0-dir')
 
         prune_rule = 'level2-dir1'
         pm = pathmap.PathMap(prune_rules=[prune_rule])
-        for match_result in pm.walk('level0-dir'):
+        for match_result in pm.matches('level0-dir'):
             idx = match_result.path.find(prune_rule)
             if idx != -1:
                 assert(all(x != os.sep for x in match_result.path[idx:]))
@@ -169,9 +170,45 @@ class TestSimpleRules():
     def test_prune_regexes(self):
         prune_rules = ['level1-dir2', 'level3-dir1']
         pm = pathmap.PathMap(prune_rules=prune_rules)
-        for match_result in pm.walk('level0-dir'):
+        for match_result in pm.matches('level0-dir'):
             for rule in prune_rules:
                 idx = match_result.path.find(rule)
                 if idx != -1:
                     assert(all(x != os.sep for x in match_result.path[idx:]))
 
+class TestSorting():
+    paths_at_level = [['c-dir', 'a-dir', 'd-file', 'b-file'],
+                      [join('c-dir', 'g-file'),
+                       join('c-dir', 'f-file'),
+                       join('a-dir', 'y-file'),
+                       join('a-dir', 'x-file'),
+                      ],
+                     ]
+                     
+    dfs_sorted = ['.', 
+                  join('.', 'a-dir'), 
+                  join('.', 'b-file'), 
+                  join('.', 'c-dir'), 
+                  join('.', 'd-file'), 
+                  join('.', 'a-dir', 'x-file'), 
+                  join('.', 'a-dir', 'y-file'),
+                  join('.', 'c-dir', 'f-file'), 
+                  join('.', 'c-dir', 'g-file'),
+                 ]
+                     
+    def setup(self):
+        self.init_dir = os.getcwd()
+        self.test_dir = mkdtemp()
+        build_dir(self.test_dir, self.paths_at_level)
+        os.chdir(self.test_dir)
+
+    def tearDown(self):
+        os.chdir(self.init_dir)
+        shutil.rmtree(self.test_dir)
+        
+    def test_sorting(self):
+        pm = pathmap.PathMap(sort=True)
+        matched_paths = [m.path for m in pm.matches('.')]
+        assert matched_paths == self.dfs_sorted
+        
+    

@@ -1,6 +1,7 @@
 '''Module for parsing directory structures.'''
 
 import os, re, warnings
+from operator import attrgetter
 from os.path import normpath
 from itertools import izip
 from collections import namedtuple
@@ -65,8 +66,8 @@ scandir.DirEntry object, and the return value from the match rule.'''
 
 class PathMap(object):
     '''Object which contains a number of 'rules' that define how it will
-    traverse a directory structure. The user can then generate paths starting
-    from one or more root paths by performing a 'walk'.
+    traverse a directory structure and what paths it will yield. The onject 
+    can then be used to generate matches starting from one or more root paths.
 
     Each 'rule' is a callable takes two arguments, the full path and the
     corresponding scandir.DirEntry object. Any rule can also be provided as
@@ -150,7 +151,7 @@ class PathMap(object):
         result = self.match_rule(path, dir_entry)
         return result
 
-    def walk(self, root_paths, dir_entries=None):
+    def matches(self, root_paths, dir_entries=None):
         '''Generate matches by recursively walking from the 'root_paths' down
         into the directory structure.
 
@@ -217,65 +218,68 @@ class PathMap(object):
             curr_dir = (root_path, root_entry)
             next_dirs = []
             while True:
-                dirs = []
-                nondirs = []
-
+                # Determine the current depth from the root_path
+                curr_depth = (curr_dir[0].count(os.sep) -
+                              root_path.count(os.sep)) + 1
+                              
+                #Build a list of entries for this level so we can sort if 
+                #requested
+                curr_entries = []
+            
                 # Try getting the contents of the current directory
                 try:
                     for e in scandir.scandir(curr_dir[0]):
+                        # Keep directories under the depth limit so we can 
+                        # resurse into them
                         if e.is_dir():
-                            dirs.append(e)
+                            if (self.depth[1] is not None and
+                                curr_depth > self.depth[1]
+                               ):
+                                continue
                         else:
-                            nondirs.append(e)
+                            # Plain files can be ignored if they violate 
+                            # either depth limit
+                            if (curr_depth < self.depth[0] or 
+                                (self.depth[1] is not None and
+                                 curr_depth > self.depth[1])
+                               ):
+                                continue
+                            
+                        #Add to the list of entries for the curr_dir
+                        curr_entries.append(e)
+                            
                 except OSError as error:
+                    #Handle errors from the scandir call
                     if self.on_error is not None:
                         self.on_error(error)
                     else:
                         raise
-                else:
-                    # Determine the current depth from the root_path
-                    curr_depth = (curr_dir[0].count(os.sep) -
-                                  root_path.count(os.sep)) + 1
-
-                    # We can clear some of the entries if the depth limits are
-                    # not met
-                    if curr_depth < self.depth[0]:
-                        nondirs = []
-                    elif (self.depth[1] is not None and
-                          curr_depth > self.depth[1]
-                         ):
-                        dirs = []
-                        nondirs = []
-
+                else:                
                     # Sort the entries if requested
                     if self.sort:
-                        dirs.sort()
-                        nondirs.sort()
+                        curr_entries.sort(key=attrgetter('name'))
 
-                    # Iterate through the directories first
-                    for e in dirs:
+                    # Iterate through the entries, yielding them if they are a 
+                    # match
+                    for e in curr_entries:
                         p = os.path.join(curr_dir[0], e.name)
-
-                        # If the directory is in our depth range, check if it
-                        # is a match
-                        if curr_depth >= self.depth[0]:
-                            match_info = self._test_target_path(p, e)
-                            if not match_info is NoMatch:
-                                yield MatchResult(p, e, match_info)
-
-                        # If it is not pruned, add it to next_dirs. Only
-                        # follow symlinks if requested.
-                        if self.follow_symlinks or not e.is_symlink():
-                            for rule in self.prune_rules:
-                                if rule(p, e):
-                                    break
-                            else:
-                                next_dirs.append((p, e))
-
-                    # Iterate through non-directories next
-                    for e in nondirs:
-                        # Yield the non-directory if it is matched
-                        p = os.path.join(curr_dir[0], e.name)
+                        
+                        if e.is_dir():
+                            # If it is not pruned, add it to next_dirs. Only
+                            # follow symlinks if requested.
+                            if self.follow_symlinks or not e.is_symlink():
+                                for rule in self.prune_rules:
+                                    if rule(p, e):
+                                        break
+                                else:
+                                    next_dirs.append((p, e))
+                                    
+                            # If we are below min depth we don't try matching 
+                            # the dir
+                            if curr_depth < self.depth[0]:
+                                continue
+                        
+                        # Test the path against the match/ignore rules
                         match_info = self._test_target_path(p, e)
                         if not match_info is NoMatch:
                             yield MatchResult(p, e, match_info)
