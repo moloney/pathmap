@@ -8,6 +8,12 @@ from collections import namedtuple
 import scandir
 
 
+try:
+    basestring
+except NameError:
+    basestring = str # Python3
+    
+
 class Singleton(type):
     _instances = {}
     def __call__(cls, *args, **kwargs):
@@ -135,13 +141,13 @@ class PathMap(object):
         self.follow_symlinks = follow_symlinks
 
     def _convert_regex_rules(self):
-        if isinstance(self.match_rule, str):
+        if isinstance(self.match_rule, basestring):
             self.match_rule = make_regex_rule(self.match_rule)
         for index, rule in enumerate(self.ignore_rules):
-            if isinstance(rule, str):
+            if isinstance(rule, basestring):
                 self.ignore_rules[index] = make_regex_rule(rule)
         for index, rule in enumerate(self.prune_rules):
-            if isinstance(rule, str):
+            if isinstance(rule, basestring):
                 self.prune_rules[index] = make_regex_rule(rule)
 
     def _test_target_path(self, path, dir_entry):
@@ -174,7 +180,7 @@ class PathMap(object):
             A `MatchResult` object is generated for each matched path.
         '''
         # Allow a single path or an iterable to be passed
-        if isinstance(root_paths, str):
+        if isinstance(root_paths, basestring):
             root_paths = [root_paths]
             if dir_entries is not None:
                 dir_entries = [dir_entries]
