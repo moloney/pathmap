@@ -3,7 +3,6 @@
 import os, re, warnings
 from operator import attrgetter
 from os.path import normpath
-from itertools import izip
 from collections import namedtuple
 import scandir
 
@@ -12,7 +11,7 @@ try:
     basestring
 except NameError:
     basestring = str # Python3
-    
+
 
 class Singleton(type):
     _instances = {}
@@ -32,7 +31,9 @@ class NoMatchType(object):
 
     __bool__ = __nonzero__
 
+
 NoMatch = NoMatchType()
+
 
 def make_regex_rule(regex_str):
     '''Takes a string containing a regex pattern and returns a function
@@ -66,19 +67,22 @@ def warn_on_error(oserror):
 
 
 MatchResult = namedtuple('MatchResult', 'path dir_entry match_info')
-'''The return value from PathMap.walk. Contains the full path, the
-scandir.DirEntry object, and the return value from the match rule.'''
+'''The return type for `PathMap.matches`. Contains the path (relative or 
+absolute depending on the `root_path` supplied to `PathMap.matches`), the
+`scandir.DirEntry` object, and the return value from the match rule.'''
 
 
 class PathMap(object):
     '''Object which contains a number of 'rules' that define how it will
-    traverse a directory structure and what paths it will yield. The onject 
-    can then be used to generate matches starting from one or more root paths.
+    traverse a directory structure and what paths it will yield. The PathMap 
+    object can then be used to generate matches starting from one or more 
+    root paths.
 
-    Each 'rule' is a callable takes two arguments, the full path and the
-    corresponding scandir.DirEntry object. Any rule can also be provided as
-    a string, in which case it will be converted to a callable using
-    `make_regex_rule`.
+    Each 'rule' is a callable that takes two arguments, the path and the
+    corresponding scandir.DirEntry object. The path may be relative or 
+    absolute depending on the supplied root_path. Any rule can also be 
+    provided as a string, in which case it will be converted to a callable 
+    using `make_regex_rule`.
 
     Parameters
     ----------
@@ -102,7 +106,7 @@ class PathMap(object):
 
     sort : bool
         If true the paths in each directory will be processed and generated
-        in sorted order, with directories proceeding files.
+        in sorted order.
 
     on_error : callable
         Callback for errors from scandir. The errors are typically due to a
@@ -159,10 +163,11 @@ class PathMap(object):
 
     def matches(self, root_paths, dir_entries=None):
         '''Generate matches by recursively walking from the 'root_paths' down
-        into the directory structure.
+        into the directory structure(s).
 
-        The object's rules define which paths are generated, and the
-        `match_rule` provides the `match_info` result as it's return value.
+        The object's rules define which paths cause a result to be generated, 
+        and the `match_rule` provides the `match_info` attribute in the 
+        generated `MatchResult` object.
 
         Parameters
         ----------
@@ -170,7 +175,7 @@ class PathMap(object):
             Provides the paths to start our walk from. If you want these to
             be processed into sorted order you must sort them yourself.
 
-        dir_entries : iter or None
+        dir_entries : list or None
             If given, must provide a scandir.DirEntry for each root path. If
             not provided we must call stat for each root path.
 
@@ -193,7 +198,7 @@ class PathMap(object):
             # Get rid of any extra path seperators
             root_path = normpath(root_path)
 
-            #Get the corresponding DirEntry
+            # Get the corresponding DirEntry
             if dir_entries is None:
                 p, name = os.path.split(root_path)
                 if p == '':
@@ -227,15 +232,15 @@ class PathMap(object):
                 # Determine the current depth from the root_path
                 curr_depth = (curr_dir[0].count(os.sep) -
                               root_path.count(os.sep)) + 1
-                              
-                #Build a list of entries for this level so we can sort if 
+
+                #Build a list of entries for this level so we can sort if
                 #requested
                 curr_entries = []
-            
+
                 # Try getting the contents of the current directory
                 try:
                     for e in scandir.scandir(curr_dir[0]):
-                        # Keep directories under the depth limit so we can 
+                        # Keep directories under the depth limit so we can
                         # resurse into them
                         if e.is_dir():
                             if (self.depth[1] is not None and
@@ -243,48 +248,46 @@ class PathMap(object):
                                ):
                                 continue
                         else:
-                            # Plain files can be ignored if they violate 
+                            # Plain files can be ignored if they violate
                             # either depth limit
-                            if (curr_depth < self.depth[0] or 
+                            if (curr_depth < self.depth[0] or
                                 (self.depth[1] is not None and
                                  curr_depth > self.depth[1])
                                ):
                                 continue
-                            
+
                         #Add to the list of entries for the curr_dir
                         curr_entries.append(e)
-                            
+
                 except OSError as error:
                     #Handle errors from the scandir call
                     if self.on_error is not None:
                         self.on_error(error)
                     else:
                         raise
-                else:                
+                else:
                     # Sort the entries if requested
                     if self.sort:
                         curr_entries.sort(key=attrgetter('name'))
 
-                    # Iterate through the entries, yielding them if they are a 
+                    # Iterate through the entries, yielding them if they are a
                     # match
                     for e in curr_entries:
                         p = os.path.join(curr_dir[0], e.name)
-                        
-                        if e.is_dir():
-                            # If it is not pruned, add it to next_dirs. Only
-                            # follow symlinks if requested.
-                            if self.follow_symlinks or not e.is_symlink():
-                                for rule in self.prune_rules:
-                                    if rule(p, e):
-                                        break
-                                else:
-                                    next_dirs.append((p, e))
-                                    
-                            # If we are below min depth we don't try matching 
+
+                        if e.is_dir(follow_symlinks=self.follow_symlinks):
+                            # If it is not pruned, add it to next_dirs. 
+                            for rule in self.prune_rules:
+                                if rule(p, e):
+                                    break
+                            else:
+                                next_dirs.append((p, e))
+
+                            # If we are below min depth we don't try matching
                             # the dir
                             if curr_depth < self.depth[0]:
                                 continue
-                        
+
                         # Test the path against the match/ignore rules
                         match_info = self._test_target_path(p, e)
                         if not match_info is NoMatch:

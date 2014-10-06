@@ -12,7 +12,7 @@ sys.path.insert(0, src_dir)
 import pathmap
 
 
-class MakeRegexRuleTest():
+class TestMakeRegexRule():
 
     known_results = {'.+':
                         {'hello': ['hello'],
@@ -46,7 +46,7 @@ class MakeRegexRuleTest():
         for match_regex, tests in self.known_results.iteritems():
             match_rule = pathmap.make_regex_rule(match_regex)
             for input_str, results in tests.iteritems():
-                assert(match_rule(input_str) == results)
+                assert(match_rule(input_str, None) == results)
 
 
 def build_dir(base_dir, paths_at_level):
@@ -184,18 +184,18 @@ class TestSorting():
                        join('a-dir', 'x-file'),
                       ],
                      ]
-                     
-    dfs_sorted = ['.', 
-                  join('.', 'a-dir'), 
-                  join('.', 'b-file'), 
-                  join('.', 'c-dir'), 
-                  join('.', 'd-file'), 
-                  join('.', 'a-dir', 'x-file'), 
+
+    dfs_sorted = ['.',
+                  join('.', 'a-dir'),
+                  join('.', 'b-file'),
+                  join('.', 'c-dir'),
+                  join('.', 'd-file'),
+                  join('.', 'a-dir', 'x-file'),
                   join('.', 'a-dir', 'y-file'),
-                  join('.', 'c-dir', 'f-file'), 
+                  join('.', 'c-dir', 'f-file'),
                   join('.', 'c-dir', 'g-file'),
                  ]
-                     
+
     def setup(self):
         self.init_dir = os.getcwd()
         self.test_dir = mkdtemp()
@@ -205,10 +205,10 @@ class TestSorting():
     def tearDown(self):
         os.chdir(self.init_dir)
         shutil.rmtree(self.test_dir)
-        
+
     def test_sorting(self):
         pm = pathmap.PathMap(sort=True)
         matched_paths = [m.path for m in pm.matches('.')]
         assert matched_paths == self.dfs_sorted
-        
-    
+
+
